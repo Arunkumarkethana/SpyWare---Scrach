@@ -3,11 +3,17 @@
 #include <ws2tcpip.h>
 #include <iostream>
 
+#include "crypto/rc4.hpp"
+
 #pragma comment(lib, "ws2_32.lib")
 
 TcpClient::TcpClient(const std::string& ipAddress, int port) : ip(ipAddress), port(port) {
     sock = INVALID_SOCKET;
     isConnected = false;
+    encryption = nullptr;
+    
+    // Key: DEADBEEF...
+    key = {0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE};
 
     WSADATA wsaData;
     WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -17,6 +23,7 @@ TcpClient::~TcpClient() {
     if(sock != INVALID_SOCKET) {
         closesocket(sock);
     }
+    if(encryption) delete (RC4*)encryption;
     WSACleanup();
 }
 
@@ -25,6 +32,10 @@ bool TcpClient::Connect() {
         closesocket(sock);
         sock = INVALID_SOCKET;
     }
+    
+    // Reset Encryption 
+    if(encryption) delete (RC4*)encryption;
+    encryption = new RC4(key);
 
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof(hints));
@@ -57,9 +68,11 @@ bool TcpClient::SendData(const std::string& data) {
         if (!Connect()) return false;
     }
 
-    // 2. Try Sending
+    // 2. Encrypt & Send
     std::string packet = data + "\n";
-    int sent = send(sock, packet.c_str(), packet.length(), 0);
+    std::string cipher = ((RC4*)encryption)->Encrypt(packet);
+    
+    int sent = send(sock, cipher.c_str(), cipher.length(), 0);
 
     // 3. Handle Failure (Broken Pipe usually)
     if (sent == SOCKET_ERROR) {

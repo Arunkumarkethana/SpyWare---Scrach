@@ -4,94 +4,70 @@
 > **DISCLAIMER**: For Authorized Red Teaming & Educational Research ONLY.
 
 ## 1. Executive Summary
-**Blackforest** is a C++ implant engineered for **Evasion**, **Persistence**, and **Silent Exfiltration**. Unlike standard shells, it operates as an autonomous agent with a self-healing network stack and a polymorphic engine that generates unique executable signatures for every build.
+**Blackforest** is a C++ implant engineered for **Evasion**, **Persistence**, and **Silent Exfiltration**. It features a custom **Polymorphic Engine**, **RC4 Network Encryption**, and **Anti-Forensics** capabilities.
 
 ## 2. Technical Architecture (Deep Scan)
 
 ### A. Evasion & Anti-Analysis
-The agent employs multiple layers of defense against EDR (Endpoint Detection & Response) and AV:
-
 1.  **Direct Syscalls (Hell's Gate Variant)**:
-    *   **Logic**: Instead of calling `kernel32.dll` APIs (which are hooked by EDRs), Blackforest mentally parses the `ntdll.dll` export table to find Syscall IDs.
-    *   **Execution**: It constructs a custom stack frame (`SyscallFrame`) and executes the raw assembly (`syscall` instruction), bypassing user-mode hooks entirely.
+    *   **Logic**: Parses `ntdll.dll` exports mentally to find Syscall IDs.
+    *   **Execution**: Executes raw assembly (`syscall`), bypassing user-mode EDR hooks.
     *   **Source**: `include/core/evasion/syscall_hook.hpp`.
 
-2.  **Polymorphic Stub Generation**:
-    *   **Engine**: `PolymorphicEngine` (Seed: Random or 1234).
-    *   **Junk Code**: Inserts variable-length NOP sleds (`0x90`) and garbage instructions to alter the binary's entry point signature.
-    *   **Runtime Decryption**: Function pointers are stored encrypted (`XOR 0xDEADBEEF`). A dynamic stub decrypts them just-in-time (JIT) before execution to hide control flow from static analysis.
+2.  **Polymorphic Stub**:
+    *   **Engine**: Generates unique "junk" assembly stubs and JIT-decrypts function pointers (`XOR 0xDEADBEEF`) to defeat static signature analysis.
     *   **Source**: `include/obfuscation/polymorphic.hpp`.
 
-3.  **String Obfuscation**:
-    *   All sensitive strings (IPs, Registry Keys) are XOR-encrypted (`Key: 0x55`) at compile time. They are decrypted only when needed on the stack.
+3.  **Timestomping (Anti-Forensics)**:
+    *   **Logic**: The agent clones the Creation/Write timestamps of `C:\Windows\explorer.exe` onto itself.
+    *   **Effect**: Hides `Blackforest.exe` from "Sort by Date" forensic searches.
+    *   **Source**: `src/core/evasion/timestomp.cpp`.
 
-### B. Persistence & Survival
-The agent ensures it survives reboots and user actions:
-*   **Registry**: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` key `BlackforestUpdater`.
-*   **File System**: Copies self to `%APPDATA%\Blackforest\Blackforest.exe`.
-*   **Process State**: Launches with `DETACHED_PROCESS | CREATE_NO_WINDOW` flags. It creates no console window and ignores parent process termination signals (e.g., closing SSH).
+### B. Persistence (Redundant)
+The agent uses multiple survival mechanisms:
+1.  **Registry**: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` -> `BlackforestUpdater`.
+2.  **Scheduled Task (Backup)**: Creates a hidden task named `OneDrive Update` that runs Daily. If Registry is wiped, this restores access.
+3.  **Process State**: Runs as `DETACHED_PROCESS` (No Window).
 
-### C. Networking (The "Silent" Stack)
-*   **RAII Persistent Socket**: The `TcpClient` class manages a single socket. It does NOT open/close connections for every packet.
-*   **Self-Healing**: If the connection breaks (EPIPE), it automatically resets the socket and retries without crashing the agent.
-*   **Protocol**: `[KEYLOG]: <data>\n` (Plaintext over TCP for speed/simplicity).
+### C. Networking (Encrypted)
+*   **Encryption**: All TCP traffic (Keylogs, Screens) is encrypted with **RC4 Stream Cipher**.
+    *   Key: `DE AD BE EF CA FE BA BE` (Hardcoded/Obfuscated).
+*   **Protocol**: Stream-based. Wireshark sees only high-entropy garbage.
+*   **Resilience**: Self-healing socket connection.
 
 ---
 
 ## 3. Deployment (Passwordless)
-We have automated the deployment pipeline to be "One-Click".
-
-### Pre-Requisites (Run Once)
+Automated CI/CD Pipeline:
 ```bash
-scripts/setup_ssh.sh
+scripts/setup_ssh.sh # Run ONCE to setup keys
+scripts/build.sh     # Compiles & updates hash
+scripts/deploy.sh    # Deploys via SCP (No Password)
 ```
-*   Generates `id_rsa` pair.
-*   Injects public key into standard user's `authorized_keys`.
-*   Enables passwordless `scp` and `ssh` execution.
-
-### CI/CD Deployment
-```bash
-scripts/build.sh    # Compiles 'Golden' binary
-scripts/deploy.sh   # Deploys to target
-```
-*   **Auto-Update**: The agent also polls `http://C2:8000/update.txt`. If you run `./build.sh`, active agents will see the new hash and upgrade themselves silently within 60 seconds.
+*   **Auto-Update**: Running `build.sh` updates the binary on the server. Agents confirm the new hash and upgrade themselves silently.
 
 ---
 
 ## 4. Operational Guide (Team Server)
-The **Team Server** unifies all Listeners into one dashboard.
-
-**Start Server**:
+Unify all operations:
 ```bash
 python3 c2/server.py
 ```
-
-| Port | Function | Description |
-| :--- | :--- | :--- |
-| **4444** | Data Receiver | Receives Keylogs, Heartbeats, Screenshots. |
-| **4445** | Reverse Shell | Interactive `cmd.exe` sessions. |
-| **8000** | Update Server | Hosts the binary for auto-updates. |
+*   **Port 4444**: Data Stream (RC4 Encrypted).
+*   **Port 4445**: Reverse Shell.
+*   **Port 8000**: Update Server.
 
 **Commands**:
-*   `list`: View active Shell sessions.
-*   `interact <ID>`: Enter a session.
-*   **Logs**: All keylogs are saved to `blackforest_logs.txt`.
+*   `list`: Active sessions.
+*   `interact <ID>`: Enter shell.
 
 ---
 
-## 5. Emergency Codes (Kill Switch)
-If the operation is compromised, you can remotely wipe all agents.
-
-1.  Edit `update.txt` (served on Port 8000).
-2.  Replace content with the **Kill Key**:
-    ```text
-    09827a801ea931cdacf6ee8828b3283add9e694764a8c0aea06f73b9eed66d22
-    ```
-3.  **Effect**:
-    *   Agents detect the key.
-    *   **Wipe**: Delete `Blackforest.exe`.
-    *   **Clean**: Delete Registry Key.
-    *   **Exit**: Terminate process.
+## 5. Emergency: Remote Kill Switch
+To Wipe All Agents:
+1.  Edit `update.txt`.
+2.  Paste **Kill Key**: `09827a801ea931cdacf6ee8828b3283add9e694764a8c0aea06f73b9eed66d22`
+3.  **Wait 60s**: Agents will self-destruct (Delete Binary + Registry + Task).
 
 ---
 
@@ -100,17 +76,18 @@ If the operation is compromised, you can remotely wipe all agents.
 ### Agent Lifecycle
 ```mermaid
 graph TD
-    Start["🚀 Start"] --> Init["🛡️ Anti-Debug Check"]
-    Init --> Persist["🔑 Install Persistence"]
-    Persist --> Threads["🧵 Spawn Threads"]
+    Start["🚀 Start"] --> Init["🛡️ Anti-Debug"]
+    Init --> Time["🕒 Timestomp"]
+    Time --> Persist1["🔑 Registry Key"]
+    Persist1 --> Persist2["📅 Scheduled Task"]
     
-    Threads --> Keys["⌨️ Keylogger (Buffer=1)"]
-    Threads --> Screen["🖥️ Screenshot (30s)"]
-    Threads --> Heart["❤️ Heartbeat (60s)"]
-    Threads --> Update["📦 Updater (60s)"]
+    Persist2 --> Threads["🧵 Spawn Threads"]
     
-    Keys --> Encrypt["🔒 XOR Encryption"]
-    Encrypt --> Net["🌐 TCP Send (Persistent)"]
+    Threads --> Keys["⌨️ Keylogger"]
+    Threads --> Screen["🖥️ Screenshot"]
+    
+    Keys --> RC4["🔒 RC4 Encrypt"]
+    RC4 --> Net["🌐 TCP Send"]
 ```
 
 *🌲 Navigate the forest. Remain unseen. 🌲*
