@@ -36,3 +36,5 @@ update.sig
 
 # HTTP server logs
 http_server.log
+c2_server.log
+blackforest_logs.txt
