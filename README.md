@@ -132,3 +132,20 @@ The agent installs itself to multiple locations to ensure survival:
 ---
 
 *🌲 SpyWare 🌲*
+
+### 5. Emergency: Remote Kill Switch
+To immediately self-destruct all active agents:
+1.  **Stop C2 Server**.
+2.  Edit `update.txt` in your web root (or served by C2).
+3.  Replace content with the **Kill Key**:
+    ```text
+    09827a801ea931cdacf6ee8828b3283add9e694764a8c0aea06f73b9eed66d22
+    ```
+4.  **Wait 60 seconds**.
+5.  All agents will:
+    *   Detect the Kill Key.
+    *   Remove Registry Persistence (`HKCU...Run`).
+    *   Delete their own executable (`Melting`).
+    *   Terminate immediately.
+
+---
