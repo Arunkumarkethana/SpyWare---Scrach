@@ -9,9 +9,15 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 import sys
+import os
 
 def load_private_key(key_file="blackforest_private.pem"):
     """Load RSA private key from PEM file"""
+    if not os.path.exists(key_file):
+        # Try same dir as script
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        key_file = os.path.join(script_dir, "blackforest_private.pem")
+        
     with open(key_file, 'rb') as f:
         private_key = serialization.load_pem_private_key(
             f.read(),

@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 import struct
+import os
 
 def generate_rsa_keypair():
     """Generate 2048-bit RSA key pair"""
@@ -24,22 +25,24 @@ def generate_rsa_keypair():
 
 def export_private_key(private_key, filename="blackforest_private.pem"):
     """Export private key in PEM format"""
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    target_path = os.path.join(script_dir, filename)
+    
     pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption()
     )
-    with open(filename, 'wb') as f:
+    with open(target_path, 'wb') as f:
         f.write(pem)
-    print(f"[+] Private key saved: {filename}")
-    return filename
+    print(f"[+] Private key saved: {target_path}")
+    return target_path
 
 def export_public_key_blob(public_key, filename="blackforest_public.blob"):
-    """
-    Export public key as Windows CryptoAPI PUBLICKEYBLOB format
-    This is a simplified version - real implementation would need full BLOBHEADER
-    For now, we'll export the modulus and exponent in a format we can parse
-    """
+    """Export public key blob and C++ array"""
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    target_path = os.path.join(script_dir, filename)
+    
     # Get public numbers
     numbers = public_key.public_numbers()
     
@@ -51,10 +54,10 @@ def export_public_key_blob(public_key, filename="blackforest_public.blob"):
     blob = struct.pack('<I', len(modulus)) + modulus
     blob += struct.pack('<I', len(exponent)) + exponent
     
-    with open(filename, 'wb') as f:
+    with open(target_path, 'wb') as f:
         f.write(blob)
     
-    print(f"[+] Public key blob saved: {filename}")
+    print(f"[+] Public key blob saved: {target_path}")
     
     # Also generate C++ array representation
     cpp_array = "std::vector<unsigned char> pubKeyBlob = {\n    "
@@ -64,11 +67,12 @@ def export_public_key_blob(public_key, filename="blackforest_public.blob"):
             cpp_array += "\n    "
     cpp_array = cpp_array.rstrip(", ") + "\n};"
     
-    with open(filename + ".cpp", 'w') as f:
+    cpp_path = target_path + ".cpp"
+    with open(cpp_path, 'w') as f:
         f.write(cpp_array)
     
-    print(f"[+] C++ array saved: {filename}.cpp")
-    return filename
+    print(f"[+] C++ array saved: {cpp_path}")
+    return target_path
 
 if __name__ == "__main__":
     print("=" * 60)
