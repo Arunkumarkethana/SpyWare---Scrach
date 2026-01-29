@@ -76,6 +76,8 @@ void TcpClient::SetTarget(const std::string& newIp, int newPort) {
 }
 
 bool TcpClient::SendData(const std::string& data) {
+    std::lock_guard<std::mutex> lock(netMtx);
+    
     // 1. If not connected, try to connect
     if (!isConnected) {
         if (!Connect()) return false;
@@ -102,7 +104,8 @@ bool TcpClient::SendData(const std::string& data) {
         
         // Retry ONCE
         if(Connect()) {
-            send(sock, packet.c_str(), packet.length(), 0);
+            // BUG FIXED: Send masqueraded 'http' string, not raw 'packet'
+            send(sock, http.c_str(), http.length(), 0);
             return true;
         }
         return false;

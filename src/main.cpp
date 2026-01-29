@@ -39,8 +39,8 @@ static const std::string base64_chars =
 
 std::string base64_encode(const std::vector<uint8_t>& buf) {
     std::string ret;
-    int i = 0;
-    int j = 0;
+    ret.reserve(buf.size() * 4 / 3 + 4); 
+    int i = 0, j = 0;
     unsigned char char_array_3[3];
     unsigned char char_array_4[4];
 
