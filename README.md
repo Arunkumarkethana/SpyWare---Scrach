@@ -1,115 +1,116 @@
-# 🌲 Blackforest: Advanced C++ Red Team Implant
+# 🌲 Blackforest: Advanced Red Team Implant
 
-> **⚠️ DISCLAIMER**: For Educational Use and Authorized Red Teaming ONLY. The author assumes no liability for misuse.
+> **⚠️ DOCUMENTATION LEVEL: DEEP TECHNICAL**
+> **DISCLAIMER**: For Authorized Red Teaming & Educational Research ONLY.
 
-## 1. Project Overview
-**Blackforest** is a professional-grade Windows implant designed for stealth, persistence, and automated long-term operation. It features a custom **Polymorphic Engine**, **Indirect Syscall execution**, and a unified **Team Server** for multi-user command & control.
+## 1. Executive Summary
+**Blackforest** is a C++ implant engineered for **Evasion**, **Persistence**, and **Silent Exfiltration**. Unlike standard shells, it operates as an autonomous agent with a self-healing network stack and a polymorphic engine that generates unique executable signatures for every build.
 
-### Key Features
-*   **🕷️ Stealth**: Uses **Indirect Syscalls** (Assembly) to bypass user-mode EDR hooks (`jmp rax`).
-*   **🧬 Polymorphism**: Generates a unique stub and hash for every single build.
-*   **🔌 Persistent Networking**: Uses a single RAII-managed TCP socket with self-healing reconnection logic (No "noisy" connection spam).
-*   **♾️ Loop-Proof Auto-Update**: Polls for updates (Port 8000) and safely upgrades itself only when the binary changes.
-*   **🚀 Passwordless Deployment**: Automated SSH key injection for one-click updates.
+## 2. Technical Architecture (Deep Scan)
 
----
+### A. Evasion & Anti-Analysis
+The agent employs multiple layers of defense against EDR (Endpoint Detection & Response) and AV:
 
-## 2. Architecture
+1.  **Direct Syscalls (Hell's Gate Variant)**:
+    *   **Logic**: Instead of calling `kernel32.dll` APIs (which are hooked by EDRs), Blackforest mentally parses the `ntdll.dll` export table to find Syscall IDs.
+    *   **Execution**: It constructs a custom stack frame (`SyscallFrame`) and executes the raw assembly (`syscall` instruction), bypassing user-mode hooks entirely.
+    *   **Source**: `include/core/evasion/syscall_hook.hpp`.
 
-```mermaid
-graph TD
-    User["👑 Operator"] -->|Term| C2["💻 Team Server (Python)"]
-    C2 --"Shell (4445)"--> Agent["🕷️ Blackforest Agent"]
-    C2 --"Data (4444)"--> Agent
-    Agent --"HTTP Poll (8000)"--> Update["📦 Update Server"]
-    
-    subgraph Victim Machine
-        Agent -->|Hook| Keyboard["⌨️ Keylogs"]
-        Agent -->|API| Screen["🖥️ Screenshots"]
-        Agent -->|CMD| Shell["🐚 System Shell"]
-    end
-```
+2.  **Polymorphic Stub Generation**:
+    *   **Engine**: `PolymorphicEngine` (Seed: Random or 1234).
+    *   **Junk Code**: Inserts variable-length NOP sleds (`0x90`) and garbage instructions to alter the binary's entry point signature.
+    *   **Runtime Decryption**: Function pointers are stored encrypted (`XOR 0xDEADBEEF`). A dynamic stub decrypts them just-in-time (JIT) before execution to hide control flow from static analysis.
+    *   **Source**: `include/obfuscation/polymorphic.hpp`.
 
-### Data Exfiltration Pipeline
-```mermaid
-sequenceDiagram
-    participant K as ⌨️ Keyboard
-    participant H as 🪝 Hook (Agent)
-    participant B as 📦 Buffer
-    participant N as 🔌 TCP Client
-    participant S as 💻 C2 Server
+3.  **String Obfuscation**:
+    *   All sensitive strings (IPs, Registry Keys) are XOR-encrypted (`Key: 0x55`) at compile time. They are decrypted only when needed on the stack.
 
-    K->>H: Press 'A'
-    H->>B: Add "A"
-    
-    opt Buffer Full or Timeout
-        B->>N: Flush Data
-        N->>N: 🔒 Encrypt Packet
-        N->>S: Send (Persistent Socket)
-        S-->>N: ACK
-    end
-```
+### B. Persistence & Survival
+The agent ensures it survives reboots and user actions:
+*   **Registry**: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` key `BlackforestUpdater`.
+*   **File System**: Copies self to `%APPDATA%\Blackforest\Blackforest.exe`.
+*   **Process State**: Launches with `DETACHED_PROCESS | CREATE_NO_WINDOW` flags. It creates no console window and ignores parent process termination signals (e.g., closing SSH).
+
+### C. Networking (The "Silent" Stack)
+*   **RAII Persistent Socket**: The `TcpClient` class manages a single socket. It does NOT open/close connections for every packet.
+*   **Self-Healing**: If the connection breaks (EPIPE), it automatically resets the socket and retries without crashing the agent.
+*   **Protocol**: `[KEYLOG]: <data>\n` (Plaintext over TCP for speed/simplicity).
 
 ---
 
-## 3. Installation & Deployment
+## 3. Deployment (Passwordless)
+We have automated the deployment pipeline to be "One-Click".
 
-### Step 1: Start the Team Server
-The Team Server unifies Shell and Data listeners into one dashboard.
-```bash
-python3 c2/server.py
-```
-*   **Port 4445**: Interactive Shells.
-*   **Port 4444**: Data Stream.
-*   **Port 8000**: Update Distribution.
-
-### Step 2: One-Time Setup (Passwordless SSH)
-To deploy without typing passwords every time, run this **ONCE**:
+### Pre-Requisites (Run Once)
 ```bash
 scripts/setup_ssh.sh
 ```
-*   This generates an SSH key (if missing).
-*   Uploads it to the victim (`Avengers@192.168.0.6`).
-*   Configures `authorized_keys` on Windows.
+*   Generates `id_rsa` pair.
+*   Injects public key into standard user's `authorized_keys`.
+*   Enables passwordless `scp` and `ssh` execution.
 
-### Step 3: CI/CD Deployment
-Once setup is done, you can build and deploy endlessly with **One Command**:
+### CI/CD Deployment
 ```bash
-scripts/build.sh    # 1. Compiles new polymorphic binary
-scripts/deploy.sh   # 2. auto-uploads & executes (No Password!)
+scripts/build.sh    # Compiles 'Golden' binary
+scripts/deploy.sh   # Deploys to target
 ```
-*   The agent will also auto-update itself via HTTP if already running.
+*   **Auto-Update**: The agent also polls `http://C2:8000/update.txt`. If you run `./build.sh`, active agents will see the new hash and upgrade themselves silently within 60 seconds.
 
 ---
 
-## 4. Operation Guide
+## 4. Operational Guide (Team Server)
+The **Team Server** unifies all Listeners into one dashboard.
 
-Inside the `c2/server.py` dashboard:
-*   `list`: Show active shell sessions.
-*   `interact <ID>`: Enter a remote shell.
-*   **Keylogs**: Appear automatically in your terminal log file.
+**Start Server**:
+```bash
+python3 c2/server.py
+```
 
-### Operational Security (OPSEC)
-1.  **Identity Isolation**: You typically cannot keylog `Admin` if you are running as `User`. Always check `whoami`.
-2.  **Persistence**: The agent survives reboots via `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
-3.  **Process Hiding**: Runs as `DETACHED_PROCESS` (No Window). Closing your SSH terminal does **NOT** kill the agent.
+| Port | Function | Description |
+| :--- | :--- | :--- |
+| **4444** | Data Receiver | Receives Keylogs, Heartbeats, Screenshots. |
+| **4445** | Reverse Shell | Interactive `cmd.exe` sessions. |
+| **8000** | Update Server | Hosts the binary for auto-updates. |
+
+**Commands**:
+*   `list`: View active Shell sessions.
+*   `interact <ID>`: Enter a session.
+*   **Logs**: All keylogs are saved to `blackforest_logs.txt`.
 
 ---
 
-## 5. Emergency: Remote Kill Switch
-To immediately self-destruct all active agents:
-1.  **Stop C2 Server**.
-2.  Edit `update.txt` in your web root.
-3.  Replace content with the **Kill Key**:
+## 5. Emergency Codes (Kill Switch)
+If the operation is compromised, you can remotely wipe all agents.
+
+1.  Edit `update.txt` (served on Port 8000).
+2.  Replace content with the **Kill Key**:
     ```text
     09827a801ea931cdacf6ee8828b3283add9e694764a8c0aea06f73b9eed66d22
     ```
-4.  **Wait 60 seconds**.
-5.  All agents will:
-    *   Detect the Kill Key.
-    *   **Melt**: Delete their own executable and Registry keys.
-    *   Terminate.
+3.  **Effect**:
+    *   Agents detect the key.
+    *   **Wipe**: Delete `Blackforest.exe`.
+    *   **Clean**: Delete Registry Key.
+    *   **Exit**: Terminate process.
 
 ---
+
+## 6. Visual Architecture
+
+### Agent Lifecycle
+```mermaid
+graph TD
+    Start["🚀 Start"] --> Init["🛡️ Anti-Debug Check"]
+    Init --> Persist["🔑 Install Persistence"]
+    Persist --> Threads["🧵 Spawn Threads"]
+    
+    Threads --> Keys["⌨️ Keylogger (Buffer=1)"]
+    Threads --> Screen["🖥️ Screenshot (30s)"]
+    Threads --> Heart["❤️ Heartbeat (60s)"]
+    Threads --> Update["📦 Updater (60s)"]
+    
+    Keys --> Encrypt["🔒 XOR Encryption"]
+    Encrypt --> Net["🌐 TCP Send (Persistent)"]
+```
 
 *🌲 Navigate the forest. Remain unseen. 🌲*
