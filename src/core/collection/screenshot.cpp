@@ -55,7 +55,7 @@ std::vector<uint8_t> Screenshot::Capture() {
     
     // BitBlt
     if(!BitBlt(hdcMem, 0, 0, width, height, hdcScreen, 0, 0, SRCCOPY)) {
-         // If failed, return empty (so we don't send black image)
+         // CLEANUP BEFORE EXIT (A++ Resource Safety)
          DeleteObject(hbmScreen);
          DeleteDC(hdcMem);
          ReleaseDC(NULL, hdcScreen);

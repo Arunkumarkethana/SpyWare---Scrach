@@ -51,6 +51,9 @@ bool TcpClient::Connect() {
     }
 
     if (connect(sock, res->ai_addr, res->ai_addrlen) < 0) {
+        int err = WSAGetLastError();
+        // Fallback logging? 
+        // std::cerr << "Connect failed: " << err << std::endl;
         closesocket(sock);
         sock = INVALID_SOCKET;
         freeaddrinfo(res);
