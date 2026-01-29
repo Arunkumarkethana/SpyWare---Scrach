@@ -43,60 +43,51 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
 std::vector<uint8_t> Screenshot::Capture() {
     std::vector<uint8_t> buffer;
     
-    // Initialize GDI+
-    GdiplusStartupInput gdiplusStartupInput;
-    ULONG_PTR gdiplusToken;
-    Status status = GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
-    if(status != Ok) return buffer;
+    // GDI+ should be initialized externally before calling this
+    // Get Desktop DC
+    HDC hdcScreen = GetDC(NULL);
+    HDC hdcMem = CreateCompatibleDC(hdcScreen);
+    int width = GetSystemMetrics(SM_CXSCREEN);
+    int height = GetSystemMetrics(SM_CYSCREEN);
     
-    {
-        // Get Desktop DC
-        HDC hdcScreen = GetDC(NULL);
-        HDC hdcMem = CreateCompatibleDC(hdcScreen);
-        int width = GetSystemMetrics(SM_CXSCREEN);
-        int height = GetSystemMetrics(SM_CYSCREEN);
-        
-        HBITMAP hbmScreen = CreateCompatibleBitmap(hdcScreen, width, height);
-        SelectObject(hdcMem, hbmScreen);
-        
-        // BitBlt
-        if(!BitBlt(hdcMem, 0, 0, width, height, hdcScreen, 0, 0, SRCCOPY)) {
-             // If failed, return empty (so we don't send black image)
-             DeleteObject(hbmScreen);
-             DeleteDC(hdcMem);
-             ReleaseDC(NULL, hdcScreen);
-             GdiplusShutdown(gdiplusToken);
-             return buffer;
-        }
-        
-        // Save to stream
-        Bitmap bitmap(hbmScreen, NULL);
-        IStream* pStream = NULL;
-        if(CreateStreamOnHGlobal(NULL, TRUE, &pStream) == S_OK) {
-            CLSID clsid;
-            if(GetEncoderClsid(L"image/jpeg", &clsid) != -1) {
-                bitmap.Save(pStream, &clsid, NULL);
-                
-                // Get content
-                LARGE_INTEGER liZero = {};
-                ULARGE_INTEGER liSize;
-                pStream->Seek(liZero, STREAM_SEEK_END, &liSize);
-                pStream->Seek(liZero, STREAM_SEEK_SET, NULL);
-                
-                size_t size = (size_t)liSize.QuadPart;
-                buffer.resize(size);
-                
-                ULONG bytesRead;
-                pStream->Read(buffer.data(), size, &bytesRead);
-            }
-            pStream->Release();
-        }
-        
-        DeleteObject(hbmScreen);
-        DeleteDC(hdcMem);
-        ReleaseDC(NULL, hdcScreen);
+    HBITMAP hbmScreen = CreateCompatibleBitmap(hdcScreen, width, height);
+    SelectObject(hdcMem, hbmScreen);
+    
+    // BitBlt
+    if(!BitBlt(hdcMem, 0, 0, width, height, hdcScreen, 0, 0, SRCCOPY)) {
+         // If failed, return empty (so we don't send black image)
+         DeleteObject(hbmScreen);
+         DeleteDC(hdcMem);
+         ReleaseDC(NULL, hdcScreen);
+         return buffer;
     }
     
-    GdiplusShutdown(gdiplusToken);
+    // Save to stream
+    Bitmap bitmap(hbmScreen, NULL);
+    IStream* pStream = NULL;
+    if(CreateStreamOnHGlobal(NULL, TRUE, &pStream) == S_OK) {
+        CLSID clsid;
+        if(GetEncoderClsid(L"image/jpeg", &clsid) != -1) {
+            bitmap.Save(pStream, &clsid, NULL);
+            
+            // Get content
+            LARGE_INTEGER liZero = {};
+            ULARGE_INTEGER liSize;
+            pStream->Seek(liZero, STREAM_SEEK_END, &liSize);
+            pStream->Seek(liZero, STREAM_SEEK_SET, NULL);
+            
+            size_t size = (size_t)liSize.QuadPart;
+            buffer.resize(size);
+            
+            ULONG bytesRead;
+            pStream->Read(buffer.data(), size, &bytesRead);
+        }
+        pStream->Release();
+    }
+    
+    DeleteObject(hbmScreen);
+    DeleteDC(hdcMem);
+    ReleaseDC(NULL, hdcScreen);
+    
     return buffer;
 }

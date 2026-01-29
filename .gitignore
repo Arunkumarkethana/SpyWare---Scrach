@@ -1,17 +1,38 @@
-# Binaries
-bin/
-*.exe
-*.o
-*.obj
-
-# Logs
-*.log
-*.txt
-
-# OS Files
-.DS_Store
-Thumbs.db
-
 # Python
 __pycache__/
 *.pyc
+*.pyo
+
+# Build artifacts
+bin/*.exe
+*.o
+*.obj
+*.pdb
+*.ilk
+
+# Logs and data
+c2/blackforest_logs.txt
+c2/screenshot_*.jpg
+
+# Temporary files
+*.tmp
+*.bak
+.DS_Store
+
+# Sensitive (keep local only)
+blackforest_private.pem
+update.txt
+update.sig
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Root binaries (HTTP-served updates)
+/Blackforest.exe
+/blackforest_public.blob
+/blackforest_public.blob.cpp
+
+# HTTP server logs
+http_server.log

@@ -21,8 +21,9 @@ public:
     TcpClient& operator=(const TcpClient&) = delete;
 
     bool SendData(const std::string& data);
+    void SetTarget(const std::string& newIp, int newPort);
 
 private:
-    void* encryption; // Void* to avoid heavy include here if preferred, or just include it.
+    class RC4* encryption; // Forward declared, proper type
     std::vector<unsigned char> key;
 };

